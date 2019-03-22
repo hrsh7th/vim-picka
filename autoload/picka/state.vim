@@ -13,20 +13,10 @@ function! s:State.constructor()
 endfunction
 
 function! s:State.reset()
-  let self.is_running = v:false
   let self.state = {}
   let self.state.items = []
   let self.state.input = ''
-endfunction
-
-function! s:State.start()
-  let self.is_running = v:true
-  call self.emit('start')
-endfunction
-
-function! s:State.finish()
-  let self.is_running = v:false
-  call self.emit('finish')
+  call self.emit('reset')
 endfunction
 
 function! s:State.set_input(input)

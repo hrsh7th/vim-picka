@@ -22,12 +22,13 @@ function! s:Picka.constructor()
   let self.prompt = picka#prompt#new()
   let self.highlights = {}
   let self.highlights.prompt = -1
-  call self.state.subscribe('start', function(self.on_redraw))
-  call self.state.subscribe('finish', function(self.on_redraw))
+  call self.state.subscribe('reset', function(self.on_redraw))
   call self.state.subscribe('add_item', function(self.on_redraw))
   call self.state.subscribe('set_input', function(self.on_redraw))
+  call self.buffer.subscribe('reset', function(self.on_redraw))
   call self.buffer.subscribe('change_scope', function(self.on_redraw))
-  call self.buffer.subscribe('refresh', function(self.on_redraw))
+  call self.buffer.subscribe('buf_win_enter', function(self.on_redraw))
+  call self.prompt.subscribe('reset', function(self.on_prompt_change))
   call self.prompt.subscribe('change', function(self.on_prompt_change))
   call self.buffer.mapping('nnoremap', 'i', function(self.on_start_insert, [0]))
   call self.buffer.mapping('nnoremap', 'a', function(self.on_start_insert, [1]))
@@ -35,8 +36,8 @@ endfunction
 
 " run
 function! s:Picka.run(callback)
-  call self.state.reset()
   call self.buffer.reset()
+  call self.state.reset()
   call self.prompt.reset()
   call a:callback(self)
   return self
@@ -50,16 +51,17 @@ function! s:Picka.open(opts)
         \   'direction': 'botright'
         \ }, 'keep')
   execute printf('%s %snew', opts.direction, opts.height)
-  execute printf('silent! edit! #%s', self.buffer.bufnr)
+  execute printf('%sbuffer', self.buffer.bufnr)
 endfunction
 
 " render
 function! s:Picka.render()
-  silent! call matchdelete(self.highlights.prompt)
-
-  if empty(self.state.items()) || !self.buffer.is_visible
+  if !self.buffer.is_visible
     return
   endif
+
+  " remove current highlights
+  silent! call matchdelete(self.highlights.prompt)
 
   " modifiable: true
   call self.buffer.modifiable(v:true)
@@ -82,21 +84,8 @@ function! s:Picka.render()
     call cursor(scope[1], self.prompt.get_col())
   endif
 
-  " show status"
-  call self.show_status()
-
   " modifiable: false
   call self.buffer.modifiable(v:false)
-endfunction
-
-function! s:Picka.show_status()
-  let text = ''
-  if self.state.is_running
-    let text = text . 'running'
-  else
-    let text = text . 'finish'
-  endif
-  echon text
 endfunction
 
 " on_redraw

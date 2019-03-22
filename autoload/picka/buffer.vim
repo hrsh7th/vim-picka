@@ -40,11 +40,12 @@ function! s:Buffer.reset()
   let bufnr = bufnr('%')
   try
     call self.modifiable(v:true)
-    execute printf('%sbufdo 0,$delete', self.bufnr)
+    execute printf('noautocmd %sbufdo 0,$delete', self.bufnr)
     call self.modifiable(v:false)
   finally
-    execute printf('%sbuffer', bufnr)
+    execute printf('noautocmd %sbuffer', bufnr)
   endtry
+  call self.emit('reset')
 endfunction
 
 " set text for specific lnum
@@ -104,7 +105,7 @@ function! s:Buffer._remap()
   for [mode, maps] in items(self.keymap)
     let self.keymap[mode] = get(self.keymap, mode, [])
     for key in self.keymap[mode]
-      execute printf('%s <silent><buffer>%s', { 'inoremap': 'iunmap', 'nnoremap': 'nunmap' }[mode], key)
+      execute printf('silent! %s <silent><buffer>%s', { 'inoremap': 'iunmap', 'nnoremap': 'nunmap' }[mode], key)
       execute printf('%s <silent><buffer>%s :<C-u>call getbufvar(%s, "picka_buffer_keymap_%s_%s")()<CR>',
             \ mode,
             \ key,
@@ -117,23 +118,24 @@ endfunction
 
 " --- Events
 
-" BufWinEnter
 function! s:Buffer.on_buf_win_enter()
+  echomsg 'buf_win_enter'
   setlocal listchars=trail:\ 
   setlocal cursorline
   let self.is_visible = v:true
   let self.timer_id = timer_start(1000, function(self.on_tick), { 'repeat': -1 })
   call self._remap()
+  call self.emit('buf_win_enter')
 endfunction
 
-" BufWinLeave
 function! s:Buffer.on_buf_win_leave()
+  echomsg 'buf_win_leave'
   let self.is_visible = v:false
   call timer_stop(get(self, 'timer_id', -1))
 endfunction
 
-" BufWipeout
 function! s:Buffer.on_buf_wipeout()
+  echomsg 'buf_wipeout'
   let self.is_visible = v:false
   call timer_stop(get(self, 'timer_id', -1))
   augroup printf('picka_buffer_%s', self.bufnr)
@@ -141,12 +143,10 @@ function! s:Buffer.on_buf_wipeout()
   augroup END
 endfunction
 
-" CursorMoved
 function! s:Buffer.on_cursor_moved()
   call self.check_state()
 endfunction
 
-" check buffer state changes
 function! s:Buffer.on_tick(timer_id)
   call self.check_state()
 endfunction

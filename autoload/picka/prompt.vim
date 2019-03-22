@@ -9,10 +9,15 @@ endfunction
 let s:Prompt = {}
 
 function! s:Prompt.constructor()
+  call self.reset()
+endfunction
+
+function! s:Prompt.reset()
   let self.input = []
   let self.pos = 0
   let self.is_running = v:false
   let self.prompt = '> '
+  call self.emit('reset')
 endfunction
 
 function! s:Prompt.running(v)
@@ -51,12 +56,6 @@ function! s:Prompt.start(pos)
       call self.right()
     endif
   endwhile
-endfunction
-
-function! s:Prompt.reset()
-  let self.input = []
-  let self.pos = 0
-  let self.is_running = v:false
 endfunction
 
 function! s:Prompt.get_col()
