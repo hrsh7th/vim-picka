@@ -13,47 +13,45 @@ function! s:Prompt.constructor()
 endfunction
 
 function! s:Prompt.reset()
+  call self.unsubscribe_all()
   let self.input = []
   let self.pos = 0
   let self.is_running = v:false
   let self.prompt = '> '
+  let self.highlight = -1
   call self.emit('reset')
-endfunction
-
-function! s:Prompt.running(v)
-  let self.is_running = a:v ? v:true : v:false
 endfunction
 
 function! s:Prompt.start(pos)
   let self.pos = a:pos
-  call self.running(v:true)
   while v:true
+    let self.is_running = v:true
     call self.emit('change')
     redraw
 
-    call self.running(v:false)
+    let self.is_running = v:false
     let char = getchar()
     if "\<Esc>" ==# nr2char(char)
       call self.escape()
       break
     endif
-    call self.running(v:true)
+    let self.is_running = v:true
 
     if "\<BS>" ==# char || "\<Del>" ==# char
       if self.pos > 0
         call self.backspace()
       endif
     elseif "\<Left>" ==# char
-      call self.left()
+      call self.on_left()
     elseif "\<Right>" ==# char
-      call self.right()
-    elseif 'h' ==# nr2char(char) && getcharmod() == 4
-      call self.left()
-    elseif 'l' ==# nr2char(char) && getcharmod() == 4
-      call self.right()
+      call self.on_right()
+    elseif "\<C-h>" ==# nr2char(char)
+      call self.on_left()
+    elseif "\<C-l>" ==# nr2char(char)
+      call self.on_right()
     else
       call insert(self.input, nr2char(char), self.pos)
-      call self.right()
+      call self.on_right()
     endif
   endwhile
 endfunction
@@ -68,11 +66,11 @@ function! s:Prompt.col2pos(col)
 endfunction
 
 function! s:Prompt.max_pos()
-  return strlen(self.text()) - strlen(self.prompt)
+  return strlen(self.text()) - strlen(self.prompt) - 1
 endfunction
 
 function! s:Prompt.max_col()
-  return strlen(self.prompt . join(self.input, '') . ' ')
+  return strlen(self.text())
 endfunction
 
 function! s:Prompt.min_col()
@@ -80,27 +78,23 @@ function! s:Prompt.min_col()
 endfunction
 
 function! s:Prompt.text()
-  let text = join(self.input, '')
-  if strlen(text) == self.pos && self.is_running
-    return self.prompt . text . ' ' " show cursor shape
-  endif
-  return self.prompt . text
+  return self.prompt . join(self.input, '') . ' '
 endfunction
 
-function! s:Prompt.escape()
+function! s:Prompt.on_escape()
   redraw
 endfunction
 
-function! s:Prompt.backspace()
+function! s:Prompt.on_backspace()
   call remove(self.input, self.pos - 1)
   call self.left()
 endfunction
 
-function! s:Prompt.left()
+function! s:Prompt.on_left()
   let self.pos = max([self.pos - 1, 0])
 endfunction
 
-function! s:Prompt.right()
+function! s:Prompt.on_right()
   let self.pos = min([self.pos + 1, len(self.input)])
 endfunction
 

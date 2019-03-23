@@ -19,6 +19,10 @@ function! s:Event.unsubscribe(name, fn)
   endif
 endfunction
 
+function! s:Event.unsubscribe_all()
+  let self._events = {}
+endfunction
+
 function! s:Event.emit(name, ...)
   for Fn in get(self._events, a:name, [])
     call call(Fn, a:000)

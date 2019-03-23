@@ -1,5 +1,7 @@
 let s:Event = picka#event#get()
 
+let s:buffer_id = 0
+
 function! picka#buffer#new()
   let instance = extend(deepcopy(s:Buffer), s:Event)
   call instance.constructor()
@@ -10,13 +12,24 @@ let s:Buffer = {}
 
 " create buffer instance
 function! s:Buffer.constructor()
-  " create new buffer
-  execute printf('badd picka_buffer_%s', bufnr('$') + 1)
-  let self.bufname = bufname(bufnr('$'))
-  let self.bufnr = bufnr('$')
+  call self.reset()
+endfunction
+
+function! s:Buffer.reset()
+  call self.unsubscribe_all()
+
+  if has_key(self, 'bufnr')
+    execute printf('%sbwipeout', self.bufnr)
+  endif
+
+  let s:buffer_id = s:buffer_id + 1
+  let self.buffer_id = s:buffer_id
+
+  execute printf('badd picka_buffer_%s', self.buffer_id)
+  let self.bufname = printf('picka_buffer_%s', self.buffer_id)
+  let self.bufnr = bufnr(self.bufname)
   let self.scope = [1, 2]
   let self.keymap = {}
-  let self.is_visible = v:false
   call setbufvar(self.bufnr, '&buftype', 'nofile')
   call setbufvar(self.bufnr, '&buflisted', 0)
   call setbufvar(self.bufnr, '&bufhidden', 'hidden')
@@ -31,25 +44,31 @@ function! s:Buffer.constructor()
     call self.bind('BufWipeout', function(self.on_buf_wipeout))
     call self.bind('CursorMoved', function(self.on_cursor_moved))
   augroup END
+
+  if self.is_visible()
+    call self.on_buf_win_enter()
+  endif
 endfunction
 
-" --- Methods
+function! s:Buffer.is_visible()
+  return bufwinnr(self.bufnr) != -1
+endfunction
 
-" reset
-function! s:Buffer.reset()
+function! s:Buffer.clear()
   let bufnr = bufnr('%')
   try
     call self.modifiable(v:true)
-    execute printf('noautocmd %sbufdo 0,$delete', self.bufnr)
+    execute printf('%sbufdo! 0 delete _', self.bufnr)
     call self.modifiable(v:false)
   finally
-    execute printf('noautocmd %sbuffer', bufnr)
+    execute printf('%sbuffer', bufnr)
   endtry
-  call self.emit('reset')
 endfunction
 
-" set text for specific lnum
 function! s:Buffer.set(lnum, text)
+  if a:lnum == 0
+    return
+  endif
   call nvim_buf_set_lines(self.bufnr, a:lnum - 1, a:lnum, v:false, [a:text])
 endfunction
 
@@ -57,7 +76,10 @@ function! s:Buffer.modifiable(v)
   call setbufvar(self.bufnr, '&modifiable', a:v ? 1 : 0)
 endfunction
 
-" get scope
+function! s:Buffer.length()
+  return len(getbufline(self.bufnr, 1, '$'))
+endfunction
+
 function! s:Buffer.get_scope()
   for wininfo in getwininfo()
     if wininfo.winnr == bufwinnr(self.bufnr)
@@ -67,7 +89,6 @@ function! s:Buffer.get_scope()
   return [1, 2]
 endfunction
 
-" check buffer state
 function! s:Buffer.check_state()
   let scope = self.get_scope()
   if scope[0] != self.scope[0] || scope[1] != self.scope[1]
@@ -76,7 +97,6 @@ function! s:Buffer.check_state()
   endif
 endfunction
 
-" bind events
 function! s:Buffer.bind(event, fn)
   call setbufvar(self.bufnr, printf('picka_buffer_bind_%s', a:event), a:fn)
   execute printf('autocmd! %s <buffer=%s> call getbufvar(%s, "picka_buffer_bind_%s")()',
@@ -86,19 +106,15 @@ function! s:Buffer.bind(event, fn)
         \ a:event)
 endfunction
 
-" keymap for mode.
 function! s:Buffer.mapping(mode, key, fn)
   let self.keymap[a:mode] = get(self.keymap, a:mode, [])
   call add(self.keymap[a:mode], a:key)
   call setbufvar(self.bufnr, printf('picka_buffer_keymap_%s_%s', a:mode, a:key), a:fn)
-  if self.is_visible
-    call self._remap()
-  endif
+  call self.apply_mapping()
 endfunction
 
-" remap all keymappings
-function! s:Buffer._remap()
-  if !self.is_visible
+function! s:Buffer.apply_mapping()
+  if !self.is_visible()
     return
   endif
 
@@ -116,27 +132,21 @@ function! s:Buffer._remap()
   endfor
 endfunction
 
-" --- Events
-
 function! s:Buffer.on_buf_win_enter()
-  echomsg 'buf_win_enter'
+  echomsg 'on_buf_win_enter: ' . self.bufnr
   setlocal listchars=trail:\ 
   setlocal cursorline
-  let self.is_visible = v:true
-  let self.timer_id = timer_start(1000, function(self.on_tick), { 'repeat': -1 })
-  call self._remap()
-  call self.emit('buf_win_enter')
+  let self.timer_id = timer_start(200, function(self.on_tick), { 'repeat': -1 })
+  call self.apply_mapping()
 endfunction
 
 function! s:Buffer.on_buf_win_leave()
-  echomsg 'buf_win_leave'
-  let self.is_visible = v:false
+  echomsg 'on_buf_win_leave: ' . self.bufnr
   call timer_stop(get(self, 'timer_id', -1))
 endfunction
 
 function! s:Buffer.on_buf_wipeout()
-  echomsg 'buf_wipeout'
-  let self.is_visible = v:false
+  echomsg 'on_buf_wipeout: ' . self.bufnr
   call timer_stop(get(self, 'timer_id', -1))
   augroup printf('picka_buffer_%s', self.bufnr)
     autocmd!

@@ -13,6 +13,7 @@ function! s:State.constructor()
 endfunction
 
 function! s:State.reset()
+  call self.unsubscribe_all()
   let self.state = {}
   let self.state.items = []
   let self.state.input = ''
@@ -20,12 +21,15 @@ function! s:State.reset()
 endfunction
 
 function! s:State.set_input(input)
-  let self.state.input = trim(a:input)
-  call self.emit('set_input')
+  let input = trim(a:input)
+  if self.state.input != input
+    let self.state.input = trim(a:input)
+    call self.emit('set_input')
+  endif
 endfunction
 
 function! s:State.length()
-  return len(self.state.items)
+  return len(self.items())
 endfunction
 
 function! s:State.add_item(item)
