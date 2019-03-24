@@ -44,13 +44,24 @@ endfunction
 
 function! s:State.items()
   if strlen(self.state.input) > 0
-    return s:narrowing(self.state.input, self.state.items)
+    return s:narrowing(self.state.input, copy(self.state.items))
   endif
   return self.state.items
 endfunction
 
 function! s:narrowing(input, items)
-  let regex = join(split(a:input, ' '), '\|')
-  return filter(copy(a:items), { k, v -> match(v.word, regex) >= 0 })
+  let g:picka_script_vars = {}
+  let g:picka_script_vars.regex = join(split(a:input, ' '), '|')
+  let g:picka_script_vars.items = a:items
+  let g:picka_script_vars.output = []
+lua << EOF
+import re
+import vim
+regex = re.compile(vim.vars['picka_script_vars']['regex'])
+vim.vars['picka_script_vars']['output'] = []
+for item in vim.vars['picka_script_vars']['items']:
+  vim.vars['picka_script_vars']['output'].append(item)
+EOF
+  return g:picka_script_vars.output
 endfunction
 

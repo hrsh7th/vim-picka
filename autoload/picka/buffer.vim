@@ -54,21 +54,12 @@ function! s:Buffer.is_visible()
   return bufwinnr(self.bufnr) != -1
 endfunction
 
-function! s:Buffer.clear()
-  let bufnr = bufnr('%')
-  try
-    call self.modifiable(v:true)
-    execute printf('%sbufdo! 0 delete _', self.bufnr)
-    call self.modifiable(v:false)
-  finally
-    execute printf('%sbuffer', bufnr)
-  endtry
+function! s:Buffer.is_focus()
+  return bufnr('%') == self.bufnr
 endfunction
 
 function! s:Buffer.set(lnum, text)
-  if a:lnum == 0
-    return
-  endif
+  if a:lnum == 0 | return |  endif
   call nvim_buf_set_lines(self.bufnr, a:lnum - 1, a:lnum, v:false, [a:text])
 endfunction
 
@@ -76,16 +67,25 @@ function! s:Buffer.modifiable(v)
   call setbufvar(self.bufnr, '&modifiable', a:v ? 1 : 0)
 endfunction
 
-function! s:Buffer.length()
+function! s:Buffer.length(...)
+  if len(a:000)
+    let start = self.length() - 1
+    let end = get(a:000, 0)
+    if start >= end | return | endif
+    call nvim_buf_set_lines(self.bufnr, start, end, v:false, map(range(start, end), { k, v -> '' }))
+  endif
   return len(getbufline(self.bufnr, 1, '$'))
 endfunction
 
 function! s:Buffer.get_scope()
-  for wininfo in getwininfo()
-    if wininfo.winnr == bufwinnr(self.bufnr)
-      return [max([wininfo.topline, 1]), max([wininfo.botline, winheight(bufwinnr(self.bufnr))])]
-    endif
-  endfor
+  if self.is_visible()
+    for wininfo in getwininfo()
+      if wininfo.winnr == bufwinnr(self.bufnr)
+        let top = max([wininfo.topline, 1])
+        return [top, top + winheight(bufwinnr(self.bufnr)) - 1]
+      endif
+    endfor
+  endif
   return [1, 2]
 endfunction
 
@@ -133,7 +133,6 @@ function! s:Buffer.apply_mapping()
 endfunction
 
 function! s:Buffer.on_buf_win_enter()
-  echomsg 'on_buf_win_enter: ' . self.bufnr
   setlocal listchars=trail:\ 
   setlocal cursorline
   let self.timer_id = timer_start(200, function(self.on_tick), { 'repeat': -1 })
@@ -141,12 +140,10 @@ function! s:Buffer.on_buf_win_enter()
 endfunction
 
 function! s:Buffer.on_buf_win_leave()
-  echomsg 'on_buf_win_leave: ' . self.bufnr
   call timer_stop(get(self, 'timer_id', -1))
 endfunction
 
 function! s:Buffer.on_buf_wipeout()
-  echomsg 'on_buf_wipeout: ' . self.bufnr
   call timer_stop(get(self, 'timer_id', -1))
   augroup printf('picka_buffer_%s', self.bufnr)
     autocmd!

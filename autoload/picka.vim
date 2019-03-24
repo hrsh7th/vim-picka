@@ -20,17 +20,18 @@ function! s:Picka.constructor()
   let self.state = picka#state#new()
   let self.buffer = picka#buffer#new()
   let self.prompt = picka#prompt#new()
-endfunction
-
-function! s:Picka.start(callback)
   call self.state.reset()
   call self.buffer.reset()
   call self.prompt.reset()
+endfunction
+
+function! s:Picka.start(callback)
+  let self.highlights = {}
+  let self.highlights.prompt = -1
   call self.state.subscribe('reset', function(self.on_redraw))
   call self.state.subscribe('add_item', function(self.on_redraw))
   call self.buffer.subscribe('reset', function(self.on_redraw))
   call self.buffer.subscribe('change_scope', function(self.on_redraw))
-  call self.buffer.subscribe('buf_win_enter', function(self.on_redraw))
   call self.prompt.subscribe('reset', function(self.on_prompt_change))
   call self.prompt.subscribe('change', function(self.on_prompt_change))
   call self.buffer.mapping('nnoremap', 'i', function(self.on_start_insert, [0]))
@@ -55,15 +56,17 @@ function! s:Picka.render()
   endif
 
   call self.buffer.modifiable(v:true)
+  if self.prompt.is_running
+    call cursor(1, 1)
+    % delete _
+  endif
 
-  call self.buffer.set(self.state.length(), '')
-
+  call self.buffer.length(self.state.length())
   let scope = self.buffer.get_scope()
   for i in range(scope[0], max([scope[0], scope[1] - 1])) " `-1` for prompt.
     call self.buffer.set(i, get(self.state.items(), i - 1, { 'word': '' }).word)
   endfor
-
-  call self.buffer.set(scope[1], self.prompt.text())
+  call self.buffer.set(scope[1], substitute(self.prompt.text(), '\r\n\|\r\|\n', '', 'g'))
 
   silent! call matchdelete(self.highlights.prompt)
   if self.prompt.is_running

@@ -25,6 +25,7 @@ endfunction
 function! s:Prompt.start(pos)
   let self.pos = a:pos
   while v:true
+
     let self.is_running = v:true
     call self.emit('change')
     redraw
@@ -32,14 +33,14 @@ function! s:Prompt.start(pos)
     let self.is_running = v:false
     let char = getchar()
     if "\<Esc>" ==# nr2char(char)
-      call self.escape()
+      call self.on_escape()
       break
     endif
     let self.is_running = v:true
 
     if "\<BS>" ==# char || "\<Del>" ==# char
       if self.pos > 0
-        call self.backspace()
+        call self.on_backspace()
       endif
     elseif "\<Left>" ==# char
       call self.on_left()
@@ -82,12 +83,13 @@ function! s:Prompt.text()
 endfunction
 
 function! s:Prompt.on_escape()
+  call self.emit('change')
   redraw
 endfunction
 
 function! s:Prompt.on_backspace()
   call remove(self.input, self.pos - 1)
-  call self.left()
+  call self.on_left()
 endfunction
 
 function! s:Prompt.on_left()
